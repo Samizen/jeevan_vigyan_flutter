@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:jeevan_vigyan/constants/colors.dart';
+import 'package:jeevan_vigyan/screens/home_page.dart';
 
-// Placeholder pages for each navigation item
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('गृह Page'));
-  }
-}
-
+// Placeholder pages for other navigation items
 class MembersPage extends StatelessWidget {
   const MembersPage({super.key});
   @override
@@ -52,6 +45,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
+  // The list of pages, now without the `const` keyword
   static const List<Widget> _pages = <Widget>[
     HomePage(),
     MembersPage(),
@@ -72,7 +66,6 @@ class _MainScreenState extends State<MainScreen> {
       body: _pages.elementAt(_selectedIndex),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Navigate to the calculator page
           _onItemTapped(4);
         },
         backgroundColor: AppColors.maroonishRed,
@@ -88,7 +81,6 @@ class _MainScreenState extends State<MainScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Left half of the bar
               IconButton(
                 icon: const Icon(Icons.home, color: AppColors.brightSkyBlue),
                 onPressed: () => _onItemTapped(0),
@@ -97,9 +89,7 @@ class _MainScreenState extends State<MainScreen> {
                 icon: const Icon(Icons.people, color: AppColors.gray),
                 onPressed: () => _onItemTapped(1),
               ),
-              // The `SizedBox` adds a space for the notched FAB
               const SizedBox(width: 48),
-              // Right half of the bar
               IconButton(
                 icon: const Icon(Icons.description, color: AppColors.gray),
                 onPressed: () => _onItemTapped(2),

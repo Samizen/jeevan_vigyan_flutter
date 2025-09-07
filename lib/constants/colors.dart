@@ -15,10 +15,12 @@ class AppColors {
   static const Color maroonishRed = Color(0xFFD01018);
   static const Color brightSkyBlue = Color(0xFF01B9F1);
   static const Color sageGreen = Color(0xFFA4D4B4);
+  static const Color brightGreen = Color(0xFF4CAF50);
 
   // Additional shades from the theme
   static const Color darkMaroon = Color(0xFF7A1A1E);
   static const Color lightMaroon = Color(0xFFE68A8D);
   static const Color darkBlue = Color(0xFF00597F);
+  static const Color offWhite = Color(0xFFF7F7F7);
   static const Color lightBlue = Color(0xFF63C5F8);
 }
