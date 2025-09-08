@@ -24,14 +24,12 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // Change this from 'static const List' to a FUNCTION that RETURNS a List.
   static List<Widget> _pages(void Function(int) onItemTapped) {
     return [
       const HomePage(),
       const MembersPage(),
       const ReportsPage(),
       const SettingsPage(),
-      // This is now a regular widget, not a const widget.
       CalculatorPage(onBackToHome: () => onItemTapped(0)),
     ];
   }
@@ -45,56 +43,91 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // The body now CALLS the _pages function, passing the onItemTapped callback.
       body: _pages(_onItemTapped).elementAt(_selectedIndex),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _onItemTapped(4);
-        },
-        backgroundColor: AppColors.maroonishRed,
-        child: const Icon(Icons.calculate_outlined, color: AppColors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        color: AppColors.charcoalBlack,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
         child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          height: 110,
+          child: Column(
+            // Use a Column to control vertical alignment of the Row
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              IconButton(
-                icon: const Icon(Icons.home),
-                color: _selectedIndex == 0
-                    ? AppColors.brightSkyBlue
-                    : AppColors.gray,
-                onPressed: () => _onItemTapped(0),
-              ),
-              IconButton(
-                icon: const Icon(Icons.people),
-                color: _selectedIndex == 1
-                    ? AppColors.brightSkyBlue
-                    : AppColors.gray,
-                onPressed: () => _onItemTapped(1),
-              ),
-              const SizedBox(width: 48),
-              IconButton(
-                icon: const Icon(Icons.description),
-                color: _selectedIndex == 2
-                    ? AppColors.brightSkyBlue
-                    : AppColors.gray,
-                onPressed: () => _onItemTapped(2),
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings),
-                color: _selectedIndex == 3
-                    ? AppColors.brightSkyBlue
-                    : AppColors.gray,
-                onPressed: () => _onItemTapped(3),
+              const SizedBox(height: 15), // Add a little space from the top
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, Icons.home_outlined, 'गृह'),
+                  _buildNavItem(1, Icons.people_outlined, 'सदस्य'),
+                  _buildCalculatorButton(),
+                  _buildNavItem(2, Icons.description_outlined, 'विवरण'),
+                  _buildNavItem(3, Icons.settings_outlined, 'सेटिङ्स'),
+                ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // Helper method to build a standard navigation item
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    return InkWell(
+      onTap: () => _onItemTapped(index),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start, // Align to top
+          children: [
+            Icon(
+              icon,
+              color: _selectedIndex == index
+                  ? AppColors.maroonishRed
+                  : AppColors.charcoalBlack,
+              size: 28,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Yantramanav',
+                fontSize: 12,
+                color: _selectedIndex == index
+                    ? AppColors.maroonishRed
+                    : AppColors.charcoalBlack,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper method to build the central calculator button
+  Widget _buildCalculatorButton() {
+    return InkWell(
+      onTap: () => _onItemTapped(4),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: const BoxDecoration(
+          color: AppColors.maroonishRed,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.calculate_outlined,
+          color: Colors.white,
+          size: 32,
         ),
       ),
     );

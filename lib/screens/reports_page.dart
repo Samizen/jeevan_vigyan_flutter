@@ -217,7 +217,7 @@ class _ReportsPageState extends State<ReportsPage> {
                       style: const TextStyle(fontFamily: 'Yantramanav'),
                     ),
                   );
-                }).toList(),
+                }),
             ],
           ),
         );
@@ -555,7 +555,7 @@ class _ReportsPageState extends State<ReportsPage> {
                 ),
               ),
             );
-          }).toList(),
+          }),
           if (categoryTotals.isEmpty && totalAmount == 0)
             const Padding(
               padding: EdgeInsets.all(16.0),
