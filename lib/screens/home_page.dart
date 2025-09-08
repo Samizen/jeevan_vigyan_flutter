@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:jeevan_vigyan/constants/colors.dart';
-import 'package:jeevan_vigyan/screens/members/add_member_screen.dart';
+import 'package:jeevan_vigyan/screens/add_transaction_form.dart';
+import 'package:jeevan_vigyan/screens/date_month_picker.dart';
+import 'package:jeevan_vigyan/screens/add_member_form.dart';
+import 'package:nepali_date_picker/nepali_date_picker.dart';
+
+import 'package:jeevan_vigyan/models/financial_transaction.dart';
+import 'package:jeevan_vigyan/models/member.dart';
+import 'package:jeevan_vigyan/models/category.dart';
+import 'package:jeevan_vigyan/services/database_service.dart';
 
 // Helper function to convert numbers to Nepali
 String _convertToNepali(String number) {
@@ -22,7 +30,9 @@ String _convertToNepali(String number) {
   });
 }
 
-// Placeholder for a single transaction list item
+// Enum to represent the transaction filter state
+enum TransactionFilter { all, today, thisWeek, income, expense }
+
 class TransactionListItem extends StatelessWidget {
   final String title;
   final String date;
@@ -61,13 +71,11 @@ class TransactionListItem extends StatelessWidget {
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.endToStart) {
-          // Swiped left for delete
           onDelete();
-          return false; // Prevents item from being dismissed
+          return false;
         } else if (direction == DismissDirection.startToEnd) {
-          // Swiped right for edit
           onEdit();
-          return false; // Prevents item from being dismissed
+          return false;
         }
         return false;
       },
@@ -155,6 +163,43 @@ class TransactionListItem extends StatelessWidget {
   }
 }
 
+// New custom filter chip widget
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Chip(
+        label: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? AppColors.white : AppColors.charcoalBlack,
+          ),
+        ),
+        backgroundColor: isSelected ? AppColors.darkBlue : AppColors.lightGray,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+        labelStyle: const TextStyle(fontSize: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(50)),
+          side: BorderSide(
+            color: isSelected ? AppColors.darkBlue : AppColors.lighterGray,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -163,87 +208,213 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Placeholder values for the UI
-  final double _remainingBalance = 100000;
-  final double _totalIncome = 7500;
-  final double _totalExpense = 7500;
-  final double _netResult = 15000;
+  NepaliDateTime _currentNepaliDate = NepaliDateTime.now();
 
-  final List<Map<String, dynamic>> _transactions = [
-    {
-      'name': 'सिता देवी',
-      'date': '२०८२ श्रावण १७',
-      'category': 'मासिक सदस्यता',
-      'amount': 3000.0,
-      'isIncome': true,
-    },
-    {
-      'name': 'राम बहादुर',
-      'date': '२०८२ श्रावण १७',
-      'category': 'कार्यालय भाडा',
-      'amount': 3000.0,
-      'isIncome': false,
-    },
-    {
-      'name': 'सिता देवी',
-      'date': '२०८२ श्रावण १६',
-      'category': 'मासिक सदस्यता',
-      'amount': 3000.0,
-      'isIncome': true,
-    },
+  static const List<String> _nepaliMonths = [
+    'बैशाख',
+    'जेठ',
+    'असार',
+    'साउन',
+    'भदौ',
+    'असोज',
+    'कार्तिक',
+    'मंसिर',
+    'पुस',
+    'माघ',
+    'फाल्गुन',
+    'चैत',
   ];
+
+  TransactionFilter _activeFilter = TransactionFilter.all;
+
+  List<FinancialTransaction> _transactions = [];
+  double _totalIncome = 0;
+  double _totalExpense = 0;
+  List<Member> _members = [];
+  List<Category> _categories = [];
+
+  Future<void> _fetchFinancialData({TransactionFilter? filter}) async {
+    final dbService = DatabaseService();
+
+    List<FinancialTransaction> fetchedTransactions;
+    double totalIncome = 0;
+    double totalExpense = 0;
+
+    final members = await dbService.getMembers();
+    final categories = await dbService.getCategories();
+
+    // Determine the date range based on the filter
+    NepaliDateTime startDate;
+    NepaliDateTime endDate;
+
+    if (filter == TransactionFilter.today) {
+      _currentNepaliDate = NepaliDateTime.now();
+      startDate = _currentNepaliDate;
+      endDate = _currentNepaliDate;
+    } else if (filter == TransactionFilter.thisWeek) {
+      _currentNepaliDate = NepaliDateTime.now();
+      startDate = _currentNepaliDate.subtract(
+        Duration(days: _currentNepaliDate.weekday - 1),
+      );
+      endDate = startDate.add(const Duration(days: 6));
+    } else {
+      startDate = NepaliDateTime(
+        _currentNepaliDate.year,
+        _currentNepaliDate.month,
+        1,
+      );
+      endDate = NepaliDateTime(startDate.year, startDate.month + 1, 0);
+    }
+
+    // Fetch all transactions for the calculated period
+    fetchedTransactions = await dbService.getTransactionsByDateRange(
+      startDate: startDate,
+      endDate: endDate,
+    );
+
+    // Calculate totals for the entire time period
+    for (var transaction in fetchedTransactions) {
+      final category = categories.firstWhere(
+        (cat) => cat.id == transaction.categoryId,
+        orElse: () => Category(id: 0, type: 'अज्ञात', name: 'अज्ञात'),
+      );
+      if (category.type == 'आय') {
+        totalIncome += transaction.amount;
+      } else {
+        totalExpense += transaction.amount;
+      }
+    }
+
+    // Apply income/expense filters on the fetched transactions
+    List<FinancialTransaction> filteredTransactions;
+    if (filter == TransactionFilter.income) {
+      filteredTransactions = fetchedTransactions.where((t) {
+        final category = categories.firstWhere((cat) => cat.id == t.categoryId);
+        return category.type == 'आय';
+      }).toList();
+    } else if (filter == TransactionFilter.expense) {
+      filteredTransactions = fetchedTransactions.where((t) {
+        final category = categories.firstWhere((cat) => cat.id == t.categoryId);
+        return category.type == 'खर्च';
+      }).toList();
+    } else {
+      filteredTransactions = fetchedTransactions;
+    }
+
+    if (mounted) {
+      setState(() {
+        _transactions = filteredTransactions;
+        _totalIncome = totalIncome;
+        _totalExpense = totalExpense;
+        _members = members;
+        _categories = categories;
+        _activeFilter = filter ?? TransactionFilter.all;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFinancialData();
+  }
+
+  void _goToPreviousMonth() {
+    setState(() {
+      _currentNepaliDate = NepaliDateTime(
+        _currentNepaliDate.year,
+        _currentNepaliDate.month - 1,
+        1,
+      );
+    });
+    _fetchFinancialData();
+  }
+
+  void _goToNextMonth() {
+    setState(() {
+      _currentNepaliDate = NepaliDateTime(
+        _currentNepaliDate.year,
+        _currentNepaliDate.month + 1,
+        1,
+      );
+    });
+    _fetchFinancialData();
+  }
+
+  void _showAddTransactionForm() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return const AddTransactionForm(initialType: '');
+      },
+    );
+    _fetchFinancialData();
+  }
+
+  void _openCalendarPicker() async {
+    NepaliDateTime? pickedDate = await showDialog<NepaliDateTime>(
+      context: context,
+      builder: (context) => DateMonthPicker(initialDate: _currentNepaliDate),
+    );
+
+    if (pickedDate != null && pickedDate != _currentNepaliDate) {
+      setState(() {
+        _currentNepaliDate = pickedDate;
+        _fetchFinancialData();
+      });
+    }
+  }
+
+  void _showAddMemberForm() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return const AddMemberForm();
+      },
+    );
+    _fetchFinancialData();
+  }
 
   @override
   Widget build(BuildContext context) {
-    String formattedRemainingBalance = NumberFormat(
-      '#,##0',
-    ).format(_remainingBalance);
-    String formattedNetResult = NumberFormat('#,##0').format(_netResult);
-    String formattedTotalIncome = NumberFormat('#,##0').format(_totalIncome);
-    String formattedTotalExpense = NumberFormat('#,##0').format(_totalExpense);
+    final _remainingBalance = _totalIncome - _totalExpense;
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        toolbarHeight: 100,
-        flexibleSpace: Container(
-          padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'जीवन विज्ञान, गठ्ठाघर शाखा',
-                style: TextStyle(
-                  fontFamily: 'Yantramanav',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24,
-                  color: AppColors.maroonishRed,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              Text(
-                'अर्थ व्यवस्थापन',
-                style: TextStyle(
-                  fontFamily: 'Yantramanav',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 24,
-                  color: AppColors.maroonishRed,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // --- Date Selector in a Rounded Box ---
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'जीवन विज्ञान, गठ्ठाघर शाखा',
+                  style: TextStyle(
+                    fontFamily: 'Yantramanav',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                    color: AppColors.maroonishRed,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  'अर्थ व्यवस्थापन',
+                  style: TextStyle(
+                    fontFamily: 'Yantramanav',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 24,
+                    color: AppColors.maroonishRed,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(8),
@@ -257,31 +428,33 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new, size: 16),
-                    onPressed: () {},
+                    onPressed: _goToPreviousMonth,
                   ),
-                  const Row(
-                    children: [
-                      Text(
-                        'श्रावण २०८१ वि.सं.',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontFamily: 'Yantramanav',
-                          color: AppColors.charcoalBlack,
+                  GestureDetector(
+                    onTap: _openCalendarPicker,
+                    child: Row(
+                      children: [
+                        Text(
+                          '${_convertToNepali(_currentNepaliDate.year.toString())} ${_nepaliMonths[_currentNepaliDate.month - 1]}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontFamily: 'Yantramanav',
+                            color: AppColors.charcoalBlack,
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.calendar_month, size: 24),
-                    ],
+                        const SizedBox(width: 8),
+                        const Icon(Icons.calendar_month, size: 24),
+                      ],
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onPressed: () {},
+                    onPressed: _goToNextMonth,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            // --- Financial Summary Container (combined) ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -293,157 +466,179 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Remaining Balance
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'बाँकी रकम: ',
-                        style: TextStyle(
-                          fontFamily: 'Yantramanav',
-                          fontWeight: FontWeight.w500,
-                          fontSize: 16,
-                          color: AppColors.charcoalBlack,
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: 'बाँकी रकम: ',
+                          style: TextStyle(
+                            fontFamily: 'Yantramanav',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                            color: AppColors.charcoalBlack,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'रु. ${_convertToNepali(formattedRemainingBalance)}',
-                        style: const TextStyle(
-                          fontFamily: 'Yantramanav',
-                          fontWeight: FontWeight.w500,
-                          fontSize: 20,
-                          color: AppColors.maroonishRed,
+                        const TextSpan(
+                          text: 'रु. ',
+                          style: TextStyle(
+                            fontFamily: 'Yantramanav',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                            color: AppColors.maroonishRed,
+                          ),
                         ),
-                      ),
-                    ],
+                        TextSpan(
+                          text: _convertToNepali(
+                            NumberFormat('#,##0').format(_remainingBalance),
+                          ),
+                          style: const TextStyle(
+                            fontFamily: 'Yantramanav',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 20,
+                            color: AppColors.maroonishRed,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  // Income and Expense Boxes
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          height: 150,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.darkBlue,
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'कुल आम्दानी',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Yantramanav',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                        child: GestureDetector(
+                          onTap: _showAddTransactionForm,
+                          child: Container(
+                            height: 150,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.darkBlue,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'कुल आम्दानी',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Yantramanav',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'रु. ${_convertToNepali(formattedTotalIncome)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Yantramanav',
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
+                                const SizedBox(height: 8),
+                                Text(
+                                  'रु. ${_convertToNepali(NumberFormat('#,##0').format(_totalIncome))}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Yantramanav',
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Icon(
-                                Icons.add_circle_outline,
-                                color: Colors.white,
-                                size: 36,
-                              ),
-                            ],
+                                const SizedBox(height: 8),
+                                const Icon(
+                                  Icons.add_circle_outline,
+                                  color: Colors.white,
+                                  size: 36,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: Container(
-                          height: 150,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.maroonishRed,
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'कुल खर्च',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Yantramanav',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                        child: GestureDetector(
+                          onTap: _showAddTransactionForm,
+                          child: Container(
+                            height: 150,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.maroonishRed,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'कुल खर्च',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Yantramanav',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'रु. ${_convertToNepali(formattedTotalExpense)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Yantramanav',
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
+                                const SizedBox(height: 8),
+                                Text(
+                                  'रु. ${_convertToNepali(NumberFormat('#,##0').format(_totalExpense))}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Yantramanav',
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Icon(
-                                Icons.add_circle_outline,
-                                color: Colors.white,
-                                size: 36,
-                              ),
-                            ],
+                                const SizedBox(height: 8),
+                                const Icon(
+                                  Icons.add_circle_outline,
+                                  color: Colors.white,
+                                  size: 36,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Net Result
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'शुद्ध नतिजा: ',
-                        style: TextStyle(
-                          fontFamily: 'Yantramanav',
-                          fontWeight: FontWeight.w500,
-                          fontSize: 16,
-                          color: AppColors.charcoalBlack,
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: 'शुद्ध नतिजा: ',
+                          style: TextStyle(
+                            fontFamily: 'Yantramanav',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                            color: AppColors.charcoalBlack,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'रु. ${_convertToNepali(formattedNetResult)}',
-                        style: const TextStyle(
-                          fontFamily: 'Yantramanav',
-                          fontWeight: FontWeight.w500,
-                          fontSize: 20,
-                          color: AppColors.maroonishRed,
+                        const TextSpan(
+                          text: 'रु. ',
+                          style: TextStyle(
+                            fontFamily: 'Yantramanav',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                            color: AppColors.maroonishRed,
+                          ),
                         ),
-                      ),
-                    ],
+                        TextSpan(
+                          text: _convertToNepali(
+                            NumberFormat(
+                              '#,##0',
+                            ).format(_totalIncome - _totalExpense),
+                          ),
+                          style: const TextStyle(
+                            fontFamily: 'Yantramanav',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 20,
+                            color: AppColors.maroonishRed,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            // --- Add Member Button ---
             GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const AddMemberScreen(),
-                  ),
-                );
-              },
+              onTap: _showAddMemberForm,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -470,18 +665,19 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 24),
-            // --- Transaction Header ---
-            const Text(
-              'मासिक लेखा',
-              style: TextStyle(
-                fontFamily: 'Yantramanav',
-                fontWeight: FontWeight.w500,
-                fontSize: 24,
-                color: AppColors.maroonishRed,
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'मासिक लेखा',
+                style: TextStyle(
+                  fontFamily: 'Yantramanav',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 24,
+                  color: AppColors.maroonishRed,
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            // --- Transaction Filters & Details Container ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -496,72 +692,70 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      const Chip(
-                        label: Text('आज'),
-                        backgroundColor: AppColors.lightGray,
-                        labelPadding: EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 0,
-                        ),
-                        labelStyle: TextStyle(fontSize: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(50)),
-                        ),
+                      _FilterChip(
+                        label: 'आज',
+                        isSelected: _activeFilter == TransactionFilter.today,
+                        onTap: () {
+                          _fetchFinancialData(filter: TransactionFilter.today);
+                        },
                       ),
-                      const Chip(
-                        label: Text('यो हप्ता'),
-                        backgroundColor: AppColors.lightGray,
-                        labelPadding: EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 0,
-                        ),
-                        labelStyle: TextStyle(fontSize: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(50)),
-                        ),
+                      _FilterChip(
+                        label: 'यो हप्ता',
+                        isSelected: _activeFilter == TransactionFilter.thisWeek,
+                        onTap: () {
+                          _fetchFinancialData(
+                            filter: TransactionFilter.thisWeek,
+                          );
+                        },
                       ),
-                      const Chip(
-                        label: Text('आम्दानी'),
-                        backgroundColor: AppColors.lightGray,
-                        labelPadding: EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 0,
-                        ),
-                        labelStyle: TextStyle(fontSize: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(50)),
-                        ),
+                      _FilterChip(
+                        label: 'आम्दानी',
+                        isSelected: _activeFilter == TransactionFilter.income,
+                        onTap: () {
+                          _fetchFinancialData(filter: TransactionFilter.income);
+                        },
                       ),
-                      const Chip(
-                        label: Text('खर्च'),
-                        backgroundColor: AppColors.lightGray,
-                        labelPadding: EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 0,
-                        ),
-                        labelStyle: TextStyle(fontSize: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(50)),
-                        ),
+                      _FilterChip(
+                        label: 'खर्च',
+                        isSelected: _activeFilter == TransactionFilter.expense,
+                        onTap: () {
+                          _fetchFinancialData(
+                            filter: TransactionFilter.expense,
+                          );
+                        },
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Placeholder transaction list
                   ..._transactions.map((transaction) {
+                    final memberName = _members
+                        .firstWhere(
+                          (member) => member.id == transaction.memberId,
+                          orElse: () => Member(
+                            id: 0,
+                            name: 'अज्ञात',
+                            contactNo: '',
+                            memberAddedDate: '',
+                          ),
+                        )
+                        .name;
+                    final category = _categories.firstWhere(
+                      (cat) => cat.id == transaction.categoryId,
+                      orElse: () =>
+                          Category(id: 0, type: 'अज्ञात', name: 'अज्ञात'),
+                    );
+
                     return TransactionListItem(
-                      title: transaction['name'],
-                      date: transaction['date'],
-                      description: transaction['category'],
-                      amount: transaction['amount'].toStringAsFixed(0),
-                      isIncome: transaction['isIncome'],
+                      title: memberName,
+                      date: transaction.transactionDate,
+                      description: category.name,
+                      amount: transaction.amount.toStringAsFixed(0),
+                      isIncome: category.type == 'आय',
                       onEdit: () {
-                        // Implement your edit logic here
-                        print('Editing transaction: ${transaction['name']}');
+                        print('Editing transaction: ${transaction.id}');
                       },
                       onDelete: () {
-                        // Implement your delete logic here
-                        print('Deleting transaction: ${transaction['name']}');
+                        print('Deleting transaction: ${transaction.id}');
                       },
                     );
                   }).toList(),

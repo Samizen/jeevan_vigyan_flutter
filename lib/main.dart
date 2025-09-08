@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:jeevan_vigyan/screens/main_screen.dart';
+import 'package:jeevan_vigyan/services/database_service.dart';
+import 'package:jeevan_vigyan/screens/reports_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Create an instance of the database service
+  final dbService = DatabaseService();
+
+  // Call the function to populate dummy data
+  await dbService.populateDummyData();
   runApp(const MyApp());
 }
 
