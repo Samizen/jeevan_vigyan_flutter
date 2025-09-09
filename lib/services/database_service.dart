@@ -83,21 +83,22 @@ class DatabaseService {
       ).toMap(),
     );
 
+    // CHANGE: Use English strings for category types
     final incomeCategoryId = await db.insert(
       'Category',
-      Category(type: 'आय', name: 'मासिक सदस्यता').toMap(),
+      Category(type: 'income', name: 'मासिक सदस्यता').toMap(),
     );
     final expenseCategoryId = await db.insert(
       'Category',
-      Category(type: 'खर्च', name: 'कार्यालय भाडा').toMap(),
+      Category(type: 'expense', name: 'कार्यालय भाडा').toMap(),
     );
     final otherIncomeId = await db.insert(
       'Category',
-      Category(type: 'आय', name: 'चन्दा/दान').toMap(),
+      Category(type: 'income', name: 'चन्दा/दान').toMap(),
     );
     final otherExpenseId = await db.insert(
       'Category',
-      Category(type: 'खर्च', name: 'बिजुलीको बिल').toMap(),
+      Category(type: 'expense', name: 'बिजुलीको बिल').toMap(),
     );
 
     await db.insert(

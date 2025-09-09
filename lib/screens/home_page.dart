@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:jeevan_vigyan/constants/colors.dart';
 import 'package:jeevan_vigyan/screens/add_transaction_form.dart';
-import 'package:jeevan_vigyan/screens/date_month_picker.dart';
 import 'package:jeevan_vigyan/screens/add_member_form.dart';
+import 'package:jeevan_vigyan/screens/date_month_picker.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
 
 import 'package:jeevan_vigyan/models/financial_transaction.dart';
@@ -276,9 +276,9 @@ class _HomePageState extends State<HomePage> {
     for (var transaction in fetchedTransactions) {
       final category = categories.firstWhere(
         (cat) => cat.id == transaction.categoryId,
-        orElse: () => Category(id: 0, type: 'अज्ञात', name: 'अज्ञात'),
+        orElse: () => Category(id: 0, type: 'unknown', name: 'अज्ञात'),
       );
-      if (category.type == 'आय') {
+      if (category.type == 'income') {
         totalIncome += transaction.amount;
       } else {
         totalExpense += transaction.amount;
@@ -290,12 +290,12 @@ class _HomePageState extends State<HomePage> {
     if (filter == TransactionFilter.income) {
       filteredTransactions = fetchedTransactions.where((t) {
         final category = categories.firstWhere((cat) => cat.id == t.categoryId);
-        return category.type == 'आय';
+        return category.type == 'income';
       }).toList();
     } else if (filter == TransactionFilter.expense) {
       filteredTransactions = fetchedTransactions.where((t) {
         final category = categories.firstWhere((cat) => cat.id == t.categoryId);
-        return category.type == 'खर्च';
+        return category.type == 'expense';
       }).toList();
     } else {
       filteredTransactions = fetchedTransactions;
@@ -341,16 +341,34 @@ class _HomePageState extends State<HomePage> {
     _fetchFinancialData();
   }
 
-  void _showAddTransactionForm() async {
-    await showModalBottomSheet(
+  void _showAddTransactionForm({String? initialType}) async {
+    final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (BuildContext context) {
-        return const AddTransactionForm(initialType: '');
-      },
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 80,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: AddTransactionForm(initialType: initialType ?? 'income'),
+      ),
     );
-    _fetchFinancialData();
+
+    if (result == true) {
+      // Reload transactions after successful insert
+      await _fetchFinancialData(filter: _activeFilter);
+    }
   }
+
+  // In lib/screens/home_page.dart
+  // Inside the _HomePageState class
 
   void _openCalendarPicker() async {
     NepaliDateTime? pickedDate = await showDialog<NepaliDateTime>(
@@ -379,7 +397,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final _remainingBalance = _totalIncome - _totalExpense;
+    final remainingBalance = _totalIncome - _totalExpense;
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
@@ -489,7 +507,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         TextSpan(
                           text: _convertToNepali(
-                            NumberFormat('#,##0').format(_remainingBalance),
+                            NumberFormat('#,##0').format(remainingBalance),
                           ),
                           style: const TextStyle(
                             fontFamily: 'Yantramanav',
@@ -506,7 +524,8 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: _showAddTransactionForm,
+                          onTap: () =>
+                              _showAddTransactionForm(initialType: 'income'),
                           child: Container(
                             height: 150,
                             padding: const EdgeInsets.all(16),
@@ -551,7 +570,8 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: GestureDetector(
-                          onTap: _showAddTransactionForm,
+                          onTap: () =>
+                              _showAddTransactionForm(initialType: 'expense'),
                           child: Container(
                             height: 150,
                             padding: const EdgeInsets.all(16),
@@ -750,15 +770,98 @@ class _HomePageState extends State<HomePage> {
                       date: transaction.transactionDate,
                       description: category.name,
                       amount: transaction.amount.toStringAsFixed(0),
-                      isIncome: category.type == 'आय',
-                      onEdit: () {
-                        print('Editing transaction: ${transaction.id}');
+                      isIncome: category.type == 'income',
+                      onEdit: () async {
+                        final result = await showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => Container(
+                            padding: EdgeInsets.only(
+                              left: 20,
+                              right: 20,
+                              top: 20,
+                              bottom:
+                                  MediaQuery.of(context).viewInsets.bottom + 80,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20),
+                              ),
+                            ),
+                            child: AddTransactionForm(
+                              initialType: category.type,
+                              transaction: transaction,
+                            ),
+                          ),
+                        );
+                        if (result == true) {
+                          await _fetchFinancialData(filter: _activeFilter);
+                        }
                       },
-                      onDelete: () {
-                        print('Deleting transaction: ${transaction.id}');
+                      onDelete: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: const Text(
+                              'करोबार हटाउनुहोस्',
+                              style: TextStyle(
+                                fontFamily: 'Yantramanav',
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.maroonishRed,
+                              ),
+                            ),
+                            content: const Text(
+                              'के तपाईं यो कारोबार हटाउन निश्चित हुनुहुन्छ?',
+                              style: TextStyle(
+                                fontFamily: 'Yantramanav',
+                                color: AppColors.charcoalBlack,
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text(
+                                  'रद्द गर्नुहोस्',
+                                  style: TextStyle(
+                                    fontFamily: 'Yantramanav',
+                                    color: AppColors.gray,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text(
+                                  'हटाउनुहोस्',
+                                  style: TextStyle(
+                                    fontFamily: 'Yantramanav',
+                                    color: AppColors.maroonishRed,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await DatabaseService().database.then(
+                            (db) => db.delete(
+                              'Transactions',
+                              where: 'id = ?',
+                              whereArgs: [transaction.id],
+                            ),
+                          );
+                          await _fetchFinancialData(filter: _activeFilter);
+                        }
                       },
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
             ),

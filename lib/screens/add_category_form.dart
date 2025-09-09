@@ -1,9 +1,11 @@
+// add_category_form.dart
+
 import 'package:flutter/material.dart';
 import 'package:jeevan_vigyan/models/category.dart';
 import 'package:jeevan_vigyan/services/database_service.dart';
 
 class AddCategoryForm extends StatefulWidget {
-  final String categoryType; // 'आय' or 'खर्च'
+  final String categoryType; // 'income' or 'expense'
 
   const AddCategoryForm({super.key, required this.categoryType});
 
@@ -16,10 +18,16 @@ class _AddCategoryFormState extends State<AddCategoryForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
 
+  // Helper method to get the Nepali name for the category type
+  String _getNepaliCategoryType(String type) {
+    return type == 'income' ? 'आय' : 'खर्च';
+  }
+
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
       final newCategory = Category(
-        type: widget.categoryType,
+        type:
+            widget.categoryType, // Keep the English identifier for the database
         name: _nameController.text,
       );
 
@@ -62,7 +70,8 @@ class _AddCategoryFormState extends State<AddCategoryForm> {
             ),
             const SizedBox(height: 20),
             Text(
-              'श्रेणी प्रकार: ${widget.categoryType}',
+              // CHANGE: Use the helper method to translate the type for display
+              'श्रेणी प्रकार: ${_getNepaliCategoryType(widget.categoryType)}',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 20),

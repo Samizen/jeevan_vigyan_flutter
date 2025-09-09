@@ -222,7 +222,7 @@ class _MonthlyMembershipReportPageState
                         columnSpacing: 16.0,
                         dataRowMinHeight: 48,
                         dataRowMaxHeight: 48,
-                        headingRowColor: MaterialStateColor.resolveWith(
+                        headingRowColor: WidgetStateColor.resolveWith(
                           (states) => AppColors.offWhite,
                         ),
                         columns: [

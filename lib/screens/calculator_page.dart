@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:jeevan_vigyan/constants/colors.dart';
 import 'package:nepali_date_picker/nepali_date_picker.dart';
 
@@ -56,7 +55,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
   double _result = 0.0;
   bool _isOperandPressed = false;
 
-  NepaliDateTime _currentNepaliDate = NepaliDateTime.now();
+  final NepaliDateTime _currentNepaliDate = NepaliDateTime.now();
 
   void _onButtonPressed(String buttonText) {
     setState(() {

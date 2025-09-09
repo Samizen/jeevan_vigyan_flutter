@@ -161,7 +161,7 @@ packages:
     source: hosted
     version: "5.3.3"
   nepali_utils:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: nepali_utils
       sha256: "686ac878ca844e0ec264a7c0da6404ab7992db5b9120d3ffe1356a3b1de266f4"

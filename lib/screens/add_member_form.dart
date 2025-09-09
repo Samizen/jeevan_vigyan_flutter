@@ -135,12 +135,7 @@ class _AddMemberFormState extends State<AddMemberForm> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 80),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(
